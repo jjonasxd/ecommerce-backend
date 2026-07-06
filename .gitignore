@@ -1,0 +1,7 @@
+# Variaveis de ambiente
+.env
+.env.local
+
+gitchave.txt
+
+__pycache__/
