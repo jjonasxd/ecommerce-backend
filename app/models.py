@@ -25,6 +25,7 @@ class registros(db.Model):
     nome = db.Column(db.String(100))
     email = db.Column(db.String(5000))
     senha = db.Column(db.String(5000))
+    blind_index = db.Column(db.String(5000))
 
 class registros_temporarios(db.Model):
     __tablename__ = 'registros_temporarios'
@@ -33,3 +34,5 @@ class registros_temporarios(db.Model):
     email = db.Column(db.String)
     codigo = db.Column(db.String(1000))
     horario = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    senha = db.Column(db.String)
+    blind_index = db.Column(db.String(5000))

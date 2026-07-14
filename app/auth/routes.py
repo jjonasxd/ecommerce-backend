@@ -7,9 +7,11 @@ main_authBP = Blueprint('RouteAuth', __name__)
 def formulario():
     dados = request.json
     try:
+        nome = dados.get('name')
         email = dados.get('email')
+        senha = dados.get('password')
     except Exception as e:
-        return jsonify({'status': f'erro na hora de pegar o email, {e}'})
+        return jsonify({'status': f'erro na hora de pegar o email ou senha, {e}'})
 
     if verificar_formulario(dados):
         if email_existe(email):
@@ -19,8 +21,9 @@ def formulario():
             codigo = enviar_codigo_de_verficacao(email)
             
             if codigo.isnumeric():
-                status = armazenar_email_temporario(email, codigo)
-                print(codigo, flush=True)
+                hash_senha, crip_email, hash_codigo, blind_index = criptografar(senha, email, codigo)
+
+                status = armazenar_email_temporario(crip_email, hash_senha, hash_codigo, blind_index)
 
                 if status.get('status') == '200':
                     return jsonify({'status': status.get('status')})
@@ -39,15 +42,12 @@ def codigo():
 
     code = dados.get('codigo')
     email = dados.get('email')
-    senha = dados.get('senha')
-    if code == None or email == None or senha == None:
-        return jsonify({'status': 'vazio'})
     
     if verificar_otp(code):
         valido = teste_codigo_valido(code, email)
 
         if valido.get('value'):
-            return jsonify({'status': 'codigo correto'})
+            return jsonify({'status': 'maravilhoso'})
         
         elif valido.get('value') == None:
             return jsonify({'status': 'o codigo esta vazio :/'}) # O codigo não e o mesmo :/

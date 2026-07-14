@@ -5,6 +5,12 @@ from flask import render_template
 from secrets import randbelow
 from resend import Emails
 from datetime import datetime, timezone, timedelta
+from dotenv import load_dotenv
+import os
+from cryptography.fernet import Fernet
+import hashlib
+
+load_dotenv()
 
 def verificar_formulario(formulario):
     nome = formulario.get('name', '')
@@ -25,12 +31,15 @@ def verificar_formulario(formulario):
     
     return True
     # os regex's não fui eu que fiz
+
 def email_existe(Email):
-    existe = db.session.query(registros.query.filter_by(email=Email).exists()).scalar()
-    if existe:
-        return True
-    else:
-        return False
+    f = Fernet(os.getenv('FERNET_KEY'))
+
+    Blind_Index = hashlib.sha256(Email.encode()).hexdigest()
+
+    existe = db.session.query(registros.query.filter_by(blind_index=Blind_Index).exists()).scalar()
+    
+    return existe
     
 def enviar_codigo_de_verficacao(email):
     codigo = f'{randbelow(999999):06d}'
@@ -47,9 +56,9 @@ def enviar_codigo_de_verficacao(email):
     except Exception as e:
         return f'Ocorreu um erro ao tentar enviar o codigo {e}'
     
-def armazenar_email_temporario(Email, Codigo):
+def armazenar_email_temporario(Email, Senha, Codigo, Blind_Index):
     try:
-        novo_registro = registros_temporarios(email=Email, codigo=Codigo)
+        novo_registro = registros_temporarios(email=Email, senha=Senha, codigo=Codigo, blind_index=Blind_Index)
         
         db.session.add(novo_registro)
         db.session.commit()
@@ -65,21 +74,23 @@ def verificar_otp(codigo):
         return False
 
 def teste_codigo_valido(Code, Email):
-    linha = registros_temporarios.query.filter_by(email=Email).first()
+    Blind_Index = hashlib.sha256(Email.encode()).hexdigest()
+    hash_code = hashlib.sha256(Code.encode()).hexdigest()
+
+    linha = registros_temporarios.query.filter_by(blind_index=Blind_Index).first()
 
     if linha:
-        if Code == linha.codigo:
+        if hash_code == linha.codigo:
             if validar_expiracao(linha.horario):
-                print('Esta valido', flush=True)
                 return {'status': 'perfeito', 'value': True} # Agora e so terminar o armazenamento definitivo no banco
             else:
-                print('ja expirou', flush=True)
                 return {'status': 'o codigo ja expirou'}
         else:
             return {'status': 'o codigo esta errado', 'value': False}
     else:
         return {'status': 'Esse email não esta no registro', 'value': False}
     
+
 def validar_expiracao(horario_criado): # metade dessa funcão foi escrita por ia, não tinha como não fazer isso!
     utc0 = datetime.now(timezone.utc)
     
@@ -92,6 +103,33 @@ def validar_expiracao(horario_criado): # metade dessa funcão foi escrita por ia
 
     return utc0_expirado > utc0
 
-import argon2
-def critografar(senha, email):
-    argon2
+from argon2 import PasswordHasher
+def criptografar(senha, email, codigo):
+    try:
+        # Senha
+        ph = PasswordHasher()
+        hash_senha = ph.hash(senha)
+    except Exception as e:
+        return f'erro ao criptografar, senha {e}'
+
+    try:
+        # Email
+        chave = os.getenv("FERNET_KEY")
+        f = Fernet(chave)
+        crip_email = f.encrypt(email.encode())
+    except Exception as e:
+        return f'erro ao criptografar, email {e}'
+    
+    try:
+        # Codigo
+        hash_codigo = hashlib.sha256(codigo.encode()).hexdigest()
+    except Exception as e:
+        return f'erro ao criptografar, codigo {e}'
+    
+    try:
+        # Blind Index
+        blind_index = hashlib.sha256(email.encode('utf-8')).hexdigest()
+    except Exception as e:
+        return f'erro ao criptografar, Blind index'
+    
+    return hash_senha, crip_email, hash_codigo, blind_index
