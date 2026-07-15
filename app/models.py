@@ -36,3 +36,4 @@ class registros_temporarios(db.Model):
     horario = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     senha = db.Column(db.String)
     blind_index = db.Column(db.String(5000))
+    nome = db.Column(db.String(100))

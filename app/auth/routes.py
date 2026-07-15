@@ -23,7 +23,7 @@ def formulario():
             if codigo.isnumeric():
                 hash_senha, crip_email, hash_codigo, blind_index = criptografar(senha, email, codigo)
 
-                status = armazenar_email_temporario(crip_email, hash_senha, hash_codigo, blind_index)
+                status = armazenar_email_temporario(crip_email, hash_senha, hash_codigo, blind_index, nome)
 
                 if status.get('status') == '200':
                     return jsonify({'status': status.get('status')})
@@ -47,7 +47,9 @@ def codigo():
         valido = teste_codigo_valido(code, email)
 
         if valido.get('value'):
-            return jsonify({'status': 'maravilhoso'})
+            valor = armazenar_db_registro(email)
+            return jsonify(valor)
+            
         
         elif valido.get('value') == None:
             return jsonify({'status': 'o codigo esta vazio :/'}) # O codigo não e o mesmo :/

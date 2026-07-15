@@ -56,9 +56,9 @@ def enviar_codigo_de_verficacao(email):
     except Exception as e:
         return f'Ocorreu um erro ao tentar enviar o codigo {e}'
     
-def armazenar_email_temporario(Email, Senha, Codigo, Blind_Index):
+def armazenar_email_temporario(Email, Senha, Codigo, Blind_Index, Nome):
     try:
-        novo_registro = registros_temporarios(email=Email, senha=Senha, codigo=Codigo, blind_index=Blind_Index)
+        novo_registro = registros_temporarios(email=Email, senha=Senha, codigo=Codigo, blind_index=Blind_Index, nome=Nome)
         
         db.session.add(novo_registro)
         db.session.commit()
@@ -133,3 +133,21 @@ def criptografar(senha, email, codigo):
         return f'erro ao criptografar, Blind index'
     
     return hash_senha, crip_email, hash_codigo, blind_index
+
+def armazenar_db_registro(Email):
+    Blind_Index = hashlib.sha256(Email.encode()).hexdigest()
+    try:
+        # Armazenar oficialmente
+        encontrar = registros_temporarios.query.filter_by(blind_index=Blind_Index).first()
+        novo_registro = registros(email=encontrar.email, senha=encontrar.senha, nome=encontrar.nome, blind_index=encontrar.blind_index)
+        db.session.add(novo_registro)
+
+        # Deletar registro temporario
+        db.session.delete(encontrar)
+
+        db.session.commit()
+        return {'status': 'nada de errado', 'valor': True}
+
+    except Exception as e:
+        db.session.rollback()
+        return {'status' f'Algo deu errado ao tentar contadar o db, armazenar ou deletar {e}' 'valor': False}
