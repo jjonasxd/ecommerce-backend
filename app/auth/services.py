@@ -1,7 +1,7 @@
 from re import search
 from app import db
 from app.models import registros, registros_temporarios
-from flask import render_template
+from flask import render_template, jsonify
 from secrets import randbelow
 from resend import Emails
 from datetime import datetime, timezone, timedelta
@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import os
 from cryptography.fernet import Fernet
 import hashlib
+from flask_jwt_extended import create_access_token, set_access_cookies
 
 load_dotenv()
 
@@ -151,3 +152,13 @@ def armazenar_db_registro(Email):
     except Exception as e:
         db.session.rollback()
         return {'status' f'Algo deu errado ao tentar contadar o db, armazenar ou deletar {e}' 'valor': False}
+    
+def jwt(Email):
+    Blind_Index = hashlib.sha256(Email.encode()).hexdigest()
+    token = create_access_token(identity=Blind_Index)
+
+    response = jsonify({'status': 'realizado com sucesso'})
+
+    set_access_cookies(response, token)
+
+    return response

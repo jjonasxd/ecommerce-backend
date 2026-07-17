@@ -48,9 +48,13 @@ def codigo():
 
         if valido.get('value'):
             valor = armazenar_db_registro(email)
-            return jsonify(valor)
+            if valor.get('valor'):
+                jsw_response = jwt(email)
+                
+                return jsw_response
+            else:
+                return jsonify(valor)
             
-        
         elif valido.get('value') == None:
             return jsonify({'status': 'o codigo esta vazio :/'}) # O codigo não e o mesmo :/
         

@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 from flask_sqlalchemy import SQLAlchemy
 import resend
+from flask_jwt_extended import JWTManager
 
 load_dotenv()
 
@@ -17,12 +18,23 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     resend.api_key = os.getenv('RESEND_API')
 
+    #JWT
+    app.config['JWT_SECRET_KEY'] = os.getenv('SECRET_KEY')
+    app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
+    app.config['JWT_COOKIE_SECURE'] = False
+    app.config['JWT_COOKIE_CSR_PROTECT'] = True
+
+    jwt = JWTManager()
+
     db.init_app(app)
 
     CORS(app, supports_credentials=True)
 
     from app.auth.routes import main_authBP
     app.register_blueprint(main_authBP)
+
+    from app.perfil.routes import BP_perfil
+    app.register_blueprint(BP_perfil)
 
 
 
