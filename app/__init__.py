@@ -5,6 +5,7 @@ import os
 from flask_sqlalchemy import SQLAlchemy
 import resend
 from flask_jwt_extended import JWTManager
+from datetime import timedelta
 
 load_dotenv()
 
@@ -16,17 +17,22 @@ def create_app():
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
     resend.api_key = os.getenv('RESEND_API')
 
     #JWT
-    app.config['JWT_SECRET_KEY'] = os.getenv('SECRET_KEY')
-    app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
-    app.config['JWT_COOKIE_SECURE'] = False
-    app.config['JWT_COOKIE_CSR_PROTECT'] = True
-
     jwt = JWTManager()
 
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
+    app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
+    app.config['JWT_COOKIE_SECURE'] = False
+    app.config['JWT_COOKIE_CSR_PROTECT'] = False
+
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=15)
+    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=7)
+
     db.init_app(app)
+    jwt.init_app(app)
 
     CORS(app, supports_credentials=True)
 
@@ -35,7 +41,5 @@ def create_app():
 
     from app.perfil.routes import BP_perfil
     app.register_blueprint(BP_perfil)
-
-
 
     return(app)

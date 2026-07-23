@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app.auth.services import *
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 main_authBP = Blueprint('RouteAuth', __name__)
 
@@ -63,3 +64,20 @@ def codigo():
 
     else:
         return jsonify({'status': 'codigo invalido'})
+
+@main_authBP.route('/api/login', methods=["POST"])
+def login():
+    dados = request.json
+    dados['name'] = 'Joao araujo' # Simulando nome, apenas para validar o nome
+
+    if verificar_formulario(dados):
+        return validando_login(dados)
+    else:
+        return jsonify({'codigo': '2', 'details': 'senha/email-informado'})
+
+@main_authBP.route('/api/me', methods=["GET"])
+@jwt_required(refresh=True)
+def testar_jwt():
+    token = get_jwt_identity()
+    print(token, flush=True)
+    return jsonify({'status': 'autenticado'}), 200

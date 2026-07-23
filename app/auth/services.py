@@ -1,15 +1,19 @@
 from re import search
 from app import db
-from app.models import registros, registros_temporarios
+from app.models import registros, registros_temporarios, RefreshTokens, user_profile
 from flask import render_template, jsonify
 from secrets import randbelow
 from resend import Emails
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 import os
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from cryptography.fernet import Fernet
 import hashlib
-from flask_jwt_extended import create_access_token, set_access_cookies
+from flask_jwt_extended import create_access_token, set_access_cookies, create_refresh_token, set_refresh_cookies
+import logging
+from app import JWTManager
 
 load_dotenv()
 
@@ -104,7 +108,6 @@ def validar_expiracao(horario_criado): # metade dessa funcão foi escrita por ia
 
     return utc0_expirado > utc0
 
-from argon2 import PasswordHasher
 def criptografar(senha, email, codigo):
     try:
         # Senha
@@ -141,24 +144,95 @@ def armazenar_db_registro(Email):
         # Armazenar oficialmente
         encontrar = registros_temporarios.query.filter_by(blind_index=Blind_Index).first()
         novo_registro = registros(email=encontrar.email, senha=encontrar.senha, nome=encontrar.nome, blind_index=encontrar.blind_index)
+
         db.session.add(novo_registro)
 
         # Deletar registro temporario
         db.session.delete(encontrar)
 
+        db.session.flush() # Recomendação
+
+        registro_basico = dados_basicos_profile(novo_registro.id, encontrar.nome) # são informações básicas para criar a tabela de profile
+        db.session.add(registro_basico)
+
         db.session.commit()
+
         return {'status': 'nada de errado', 'valor': True}
 
     except Exception as e:
         db.session.rollback()
-        return {'status' f'Algo deu errado ao tentar contadar o db, armazenar ou deletar {e}' 'valor': False}
+        return {'status': f'Algo deu errado ao tentar contadar o db, armazenar ou deletar {e}', 'valor': False}
     
-def jwt(Email):
-    Blind_Index = hashlib.sha256(Email.encode()).hexdigest()
-    token = create_access_token(identity=Blind_Index)
+def jwt(email):
+    Blind_Index = hashlib.sha256(email.encode()).hexdigest()
 
-    response = jsonify({'status': 'realizado com sucesso'})
+    try:
+        usuario = registros.query.filter_by(blind_index=Blind_Index).first()
+    except Exception as e:
+        logging.error(e)
+        return jsonify({'status': 'erro ao procurar por blind index no db', 'details': e})
+    
+    if not usuario:
+        return jsonify({'status': 'nenhum usuario encontrado'})
 
-    set_access_cookies(response, token)
+    try:
+        RefreshTokens.query.filter_by(userid=usuario.id).delete()
+        db.session.commit()
+    except:
+        pass
 
+    try:
+        access_token = create_access_token(identity=str(usuario.id))
+        refresh_token = create_refresh_token(identity=str(usuario.id))
+        response = jsonify({'status': 'realizado com sucesso', 'codigo': '1'})
+
+        set_access_cookies(response, access_token)
+        set_refresh_cookies(response, refresh_token)
+    except Exception as e:
+        return jsonify({'status': 'ocorreu um erro ao criar os tokens', 'details': e})
+    
+    try:
+        TableRefreshToken = RefreshTokens(token=refresh_token, userid=int(usuario.id))
+        db.session.add(TableRefreshToken)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'erro ao enviar o refresh_token no db', 'details': e})
+    
     return response
+
+def dados_basicos_profile(User_Id, nome):
+    Nome_Final = str(nome).strip()
+    Primeiro_Nome = Nome_Final.split()
+    perfil_basico = user_profile(user_id=User_Id, nome_completo=Nome_Final, primeiro_nome=Primeiro_Nome[0])
+
+    return perfil_basico
+
+def validando_login(dados):
+    # Pegando dados
+    email = dados.get('email')
+    senha = dados.get('password')
+
+    if not email or not senha:
+        return jsonify({'codigo': '3', 'details': 'senha vazia'})
+
+    # Procurando no db
+    Blind_Index = hashlib.sha256(email.encode()).hexdigest()
+    try:
+        userlogin = registros.query.filter_by(blind_index=Blind_Index).first()
+    except Exception as e:
+        return jsonify({'codigo': '4', 'details': 'erro ao tentar encontrar dentro do db'})
+
+    if not userlogin:
+        return jsonify({'codigo': '8', 'details': 'erro ao tentar buscar usuario do dbl, retorno vazio'})
+    # Validando senha
+    ph = PasswordHasher()
+
+    try:
+        ph.verify(userlogin.senha, senha)
+        return jwt(email)
+    
+    except VerifyMismatchError:
+        return jsonify({'codigo': '5', 'details': 'senha incorreta'})
+    except InvalidHashError:
+        return jsonify({'codigo': '6', 'details': 'Formato do hash armazenado e incorreto'})
