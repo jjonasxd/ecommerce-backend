@@ -7,15 +7,21 @@ main_authBP = Blueprint('RouteAuth', __name__)
 @main_authBP.route('/api/registro', methods=['POST'])
 def formulario():
     dados = request.json
-    try:
-        nome = dados.get('name')
-        email = dados.get('email')
-        senha = dados.get('password')
-    except Exception as e:
-        return jsonify({'status': f'erro na hora de pegar o email ou senha, {e}'})
+
+    nome = dados.get('name')
+    email = dados.get('email')
+    senha = dados.get('password')
+    remember = dados.get('remember')
+
+    if not nome or not email or not senha or remember is None:
+        return jsonify({'status': f'Informações incompletas ou inexistente'})
 
     if verificar_formulario(dados):
-        if email_existe(email):
+        email_resposta = email_existe(email)
+
+        if email_resposta["erro"]: # Eu deixei direto porque sei que não vou ter KeyError
+            return jsonify({'codigo': '500', 'status': 'erro ao tentar contadar o db'})
+        elif email_resposta["existe"]:
             return jsonify({'codigo': '1', 'status': 'ja existe'})
         
         else:
@@ -24,7 +30,7 @@ def formulario():
             if codigo.isnumeric():
                 hash_senha, crip_email, hash_codigo, blind_index = criptografar(senha, email, codigo)
 
-                status = armazenar_email_temporario(crip_email, hash_senha, hash_codigo, blind_index, nome)
+                status = armazenar_email_temporario(crip_email, hash_senha, hash_codigo, blind_index, nome, remember)
 
                 if status.get('status') == '200':
                     return jsonify({'status': status.get('status')})
@@ -32,7 +38,6 @@ def formulario():
                     return jsonify({'status': '0', 'details': 'erro ao armazenar no banco de dados'})
                   
             else:
-                print(codigo, flush=True)
                 return jsonify({'status': "erro o codigo gerado não atende os requisitos 500"})
     else:
         return jsonify({'status': 'erro, senha/email/nome mal-informados'})
@@ -43,14 +48,19 @@ def codigo():
 
     code = dados.get('codigo')
     email = dados.get('email')
-    
+
+    if not code or not email:
+        return jsonify({'status': 'dados incompletos'})
     if verificar_otp(code):
         valido = teste_codigo_valido(code, email)
 
         if valido.get('value'):
             valor = armazenar_db_registro(email)
             if valor.get('valor'):
-                jsw_response = jwt(email)
+                if valor.get('remember'):
+                    jsw_response = jwt(email)
+                else:
+                    jsw_response = criar_session(email)
                 
                 return jsw_response
             else:
@@ -76,8 +86,6 @@ def login():
         return jsonify({'codigo': '2', 'details': 'senha/email-informado'})
 
 @main_authBP.route('/api/me', methods=["GET"])
-@jwt_required(refresh=True)
+@jwt_required()
 def testar_jwt():
-    token = get_jwt_identity()
-    print(token, flush=True)
     return jsonify({'status': 'autenticado'}), 200

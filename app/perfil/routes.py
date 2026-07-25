@@ -1,4 +1,4 @@
-from flask import Flask, Blueprint, request
+from flask import Flask, Blueprint, request, session
 from app.perfil.services import *
 from flask_jwt_extended import get_jwt_identity, create_access_token, set_access_cookies
 
@@ -27,4 +27,17 @@ def refresh():
 
 @BP_perfil.route('/api/perfil-changes', methods=["POST"])
 def mudancas():
-    pass
+    foto = request.files.get('foto')
+    #if (verificar_arquivo(foto.filename, foto.mimetype) and imagem_valida(foto.stream)):
+    #    return armazenar_foto(foto.)
+
+    return jsonify({'status': 'sucesso'})
+
+@BP_perfil.route('/api/perfil-dados-session', methods=["GET"])
+def pegar_sessao():
+    dados = session.get('user_id')
+
+    if dados == None:
+        return jsonify({'status': 'erro ao tentar pegar user_id', 'codigo': '9'})
+
+    return resgatar_dados_usuario(dados)

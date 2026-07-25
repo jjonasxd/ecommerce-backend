@@ -2,6 +2,9 @@ from app.models import user_profile
 from app import db
 from flask import jsonify
 from flask_jwt_extended import jwt_required
+from werkzeug.utils import secure_filename
+from PIL import Image
+import uuid
 
 def resgatar_dados_usuario(UserId):
     try:
@@ -24,3 +27,43 @@ def resgatar_dados_usuario(UserId):
     }
 
     return jsonify(user_data)
+
+allowed_extensions = ['png', 'jpg', 'jpeg', 'webp']
+allowed_mimetypes = ['image/png', 'image/jpeg', 'image/webp']
+allowed_ext_format = {
+    "PNG": 'png',
+    "JPEG": 'jpg',
+    "WEBP": 'webp'
+}
+
+def imagem_valida(filesteam):
+    try:
+        img = Image.open(filesteam)
+        img.verify()
+        filesteam.seek(0)
+        return True
+    except Exception:
+        return False
+
+# pqp to desgastado fazendo isso, amanha nos continua
+def validar_e_sanitizar_arquivo(file):
+    exetensao = str(file.filename).lower().rsplit(".", 1)[1]
+
+    if exetensao in allowed_extensions and file.mimetype in allowed_mimetypes:
+        nome = f"avatar_{uuid.uuid4().hex}.{exetensao}"
+    else:
+        return {'status': 'extensão não permitida', 'value': False}
+
+    Image.MAX_IMAGE_PIXELS = 10_000_000
+    try:
+        img = Image.open(file.stream)
+        img.verify()
+
+        file.stream.seek(0)
+        img = Image.open(file.stream)
+        if img.format not in allowed_ext_format:
+            return {'status': 'formato de imagem invalido', 'value': False}
+    except Exception:
+        return {'status': 'a imagem fornecida não e válida', 'value': False}
+
+    return {'status': 'none', 'value': True, 'nome': nome}

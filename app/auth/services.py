@@ -1,7 +1,7 @@
 from re import search
 from app import db
 from app.models import registros, registros_temporarios, RefreshTokens, user_profile
-from flask import render_template, jsonify
+from flask import render_template, jsonify, session
 from secrets import randbelow
 from resend import Emails
 from datetime import datetime, timezone, timedelta
@@ -41,10 +41,12 @@ def email_existe(Email):
     f = Fernet(os.getenv('FERNET_KEY'))
 
     Blind_Index = hashlib.sha256(Email.encode()).hexdigest()
-
-    existe = db.session.query(registros.query.filter_by(blind_index=Blind_Index).exists()).scalar()
+    try:
+        existe = db.session.query(registros.query.filter_by(blind_index=Blind_Index).exists()).scalar()
+        return {'erro': False, 'existe': existe}
     
-    return existe
+    except Exception as e:
+        return {'erro': True, 'existe': None}
     
 def enviar_codigo_de_verficacao(email):
     codigo = f'{randbelow(999999):06d}'
@@ -61,9 +63,9 @@ def enviar_codigo_de_verficacao(email):
     except Exception as e:
         return f'Ocorreu um erro ao tentar enviar o codigo {e}'
     
-def armazenar_email_temporario(Email, Senha, Codigo, Blind_Index, Nome):
+def armazenar_email_temporario(Email, Senha, Codigo, Blind_Index, Nome, Remember):
     try:
-        novo_registro = registros_temporarios(email=Email, senha=Senha, codigo=Codigo, blind_index=Blind_Index, nome=Nome)
+        novo_registro = registros_temporarios(email=Email, senha=Senha, codigo=Codigo, blind_index=Blind_Index, nome=Nome, remember=Remember)
         
         db.session.add(novo_registro)
         db.session.commit()
@@ -107,6 +109,8 @@ def validar_expiracao(horario_criado): # metade dessa funcão foi escrita por ia
     utc0_expirado = horario_objeto + expiracao
 
     return utc0_expirado > utc0
+
+# Agora que eu percebi eu preciso criar uma função que deleta o email-temporario depois de uns 10 minutos
 
 def criptografar(senha, email, codigo):
     try:
@@ -157,7 +161,7 @@ def armazenar_db_registro(Email):
 
         db.session.commit()
 
-        return {'status': 'nada de errado', 'valor': True}
+        return {'status': 'nada de errado', 'valor': True, 'remember': encontrar.remember}
 
     except Exception as e:
         db.session.rollback()
@@ -212,9 +216,10 @@ def validando_login(dados):
     # Pegando dados
     email = dados.get('email')
     senha = dados.get('password')
+    isremember = dados.get('remember')
 
-    if not email or not senha:
-        return jsonify({'codigo': '3', 'details': 'senha vazia'})
+    if not email or not senha or isremember is None:
+        return jsonify({'codigo': '3', 'details': 'dados incopletos'})
 
     # Procurando no db
     Blind_Index = hashlib.sha256(email.encode()).hexdigest()
@@ -230,9 +235,29 @@ def validando_login(dados):
 
     try:
         ph.verify(userlogin.senha, senha)
-        return jwt(email)
+        if isremember:
+            return jwt(email)
+        else:
+            return criar_session(email)
     
     except VerifyMismatchError:
         return jsonify({'codigo': '5', 'details': 'senha incorreta'})
     except InvalidHashError:
         return jsonify({'codigo': '6', 'details': 'Formato do hash armazenado e incorreto'})
+
+def criar_session(email):
+    Blind_Index = hashlib.sha256(email.encode()).hexdigest()
+
+    try:
+        usuario = registros.query.filter_by(blind_index=Blind_Index).first()
+    except Exception as e:
+        return jsonify({'status': 'erro ao tentar procurar no db'})
+
+    if not usuario:
+        return jsonify({'status': 'query vazia'})
+
+    print(usuario.id, flush=True)
+    session['user_id'] = usuario.id
+    session.modified = True
+
+    return jsonify({'status': 'sessão criada com sucesso', 'codigo': '1'})

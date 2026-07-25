@@ -31,6 +31,8 @@ def create_app():
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=15)
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=7)
 
+    app.secret_key = os.getenv('APP_SECRET_KEY')
+
     db.init_app(app)
     jwt.init_app(app)
 

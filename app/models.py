@@ -38,6 +38,7 @@ class registros_temporarios(db.Model):
     senha = db.Column(db.String)
     blind_index = db.Column(db.String(5000))
     nome = db.Column(db.String(100))
+    remember = db.Column(db.Boolean, default=True)
 
 class RefreshTokens(db.Model):
     __tablename__ = 'RefreshTokens'
