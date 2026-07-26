@@ -10,6 +10,7 @@ from datetime import timedelta
 load_dotenv()
 
 db = SQLAlchemy()
+upload_folder = 'app/uploads'
 
 def create_app():
     app = Flask(__name__)
