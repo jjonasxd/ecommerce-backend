@@ -5,7 +5,7 @@ from app.decorator import login_required
 
 BP_perfil = Blueprint('rotas_perfil', __name__)
 
-@BP_perfil.route('/api/perfil-dados', methods=['PUT'])
+@BP_perfil.route('/api/perfil-dados', methods=['GET'])
 @login_required
 def dados_do_perfil():
     user_id = g.user_id
