@@ -10,7 +10,8 @@ def login_required(func):
         try:
             verify_jwt_in_request(optional=True)
             user_id = get_jwt_identity()
-        except Exception:
+        except Exception as e:
+            print(e, flush=True) # Erro CSRF double submit tokens do not match
             pass
 
         if not user_id:

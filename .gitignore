@@ -6,3 +6,7 @@ gitchave.txt
 
 **/__pycache__/
 *.pyc
+
+app/uploads/*
+
+!app/uploads/uuid

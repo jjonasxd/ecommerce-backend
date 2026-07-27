@@ -1,11 +1,14 @@
 from app.models import user_profile
 from app import db, upload_folder
-from flask import jsonify
+from flask import jsonify, send_from_directory
 from flask_jwt_extended import jwt_required
 from werkzeug.utils import secure_filename
 from PIL import Image, UnidentifiedImageError
+from PIL.Image import DecompressionBombError
 import uuid
 import os
+import logging
+import glob
 
 def resgatar_dados_usuario(UserId):
     try:
@@ -37,98 +40,106 @@ allowed_ext_format = {
     "WEBP": 'webp'
 }
 
-def imagem_valida(filesteam):
-    try:
-        img = Image.open(filesteam)
-        img.verify()
-        filesteam.seek(0)
-        return True
-    except Exception:
-        return False
-
-# pqp to desgastado fazendo isso, amanha nos continua
-def validar_e_sanitizar_arquivo(file, nome):
+def validar_arquivo(file):
     exetensao = os.path.splitext(file.filename)[1][1:]
     exetensao.lower()
 
     if not exetensao:
-        return {'status': 'extensão não encontrada'}
+        return 'extensao do arquivo não encontrada', True, None
 
     if exetensao in allowed_extensions and file.mimetype in allowed_mimetypes:
-        nome_seguro = f"{nome}.{exetensao}"
-        pasta = uuid.uuid4().hex
-        os.makedirs(f'{upload_folder}/{pasta}', exist_ok=True)
-
-        path = os.path.join(f'{upload_folder}/{pasta}', nome_seguro)
+        pass
     else:
-        return {'status': 'extensão não permitida', 'value': False}
+        return 'Extensão não permitida', True, None
 
-    Image.MAX_IMAGE_PIXELS = 10_000_000
     try:
+        Image.MAX_IMAGE_PIXELS = 10_000_000
         img = Image.open(file.stream)
         img.verify()
 
-        img = Image.open(file.stream)
         file.stream.seek(0)
+
+        img = Image.open(file.stream)
+
+        file.stream.seek(0)
+
         if img.format not in allowed_ext_format:
-            return {'status': 'formato de imagem invalido', 'value': False}
+            return 'Formato de imagem não permitido', True, None
         
-    except (IOError, SyntaxError, UnidentifiedImageError): # Recomendação
-        return {'status': 'a imagem fornecida não e válida', 'value': False}
+    except (IOError, SyntaxError, UnidentifiedImageError, DecompressionBombError): # Recomendação
+        return 'A imagem fornecida não e válida', True, None
 
-    return {'status': 'none', 'value': True, 'path': path, 'uuid': pasta}
+    return 'Checagem concluida imagem válida', False, file
 
-def verificar_existencia(id):
+def verificar_existencia(id, nome_url):
     try:
-        usuario = user_profile.query.filter_by(user_id=id).first()
-        s_uuid = usuario.get('uuid')
+        registro = user_profile.query.filter_by(user_id=id).first()
 
-        if not usuario:
-            return {'status': 'arquivos do usuario não encontrado', 'erro': True}
-        if not s_uuid:
-            return {'status': 'uuid não encontrado', 'erro': False, 'vazio': True}
+        if not registro:
+            logging.error(f'Registro não encontrado UserID: {id}')
+            return "Registro não encontrado", True, None
 
-        return {'status': 'certinho', 'erro': False, 'uuid': s_uuid, }
+        url = getattr(registro, nome_url, None)
+        print(url, flush=True)
+
+        if not url:
+            return 'URL não encontrada', False, None
+
+        return "Encontrada", False, url
     except Exception as e:
-        return {'status': 'ocorreu um erro ao consutar o db', 'erro': True}
+        return f"Erro ao consultar o DB {e}", True, None
 
-def atualizar_avatar(user_id, file):
+def criar_arquivo(file_secure, nome, user_id):
+    extensao = os.path.splitext(file_secure.filename)[1]
+    nome_arquivo = f'{nome}{extensao}'
+    user_uuid = uuid.uuid4().hex
+    path = f'{upload_folder}/{user_uuid}'
+    nome_url = f'{nome}_url'
+
+    try:
+        os.makedirs(path, exist_ok=False)
+        avatar_path = os.path.join(path, nome_arquivo)
+
+        file_secure.save(avatar_path)
+    except FileExistsError:
+        return 'Erro avatar já criado, tente novamente', True
+
+    url = f'http://127.0.0.1:5000/api/uploads/{user_uuid}/{nome_arquivo}'
+
     try:
         registro = user_profile.query.filter_by(user_id=user_id).first()
 
         if not registro:
-            return {'status': 'registro não encontrado', 'erro': True}
+            logging.error(f'Registro não encontrado UserID: {user_id}')
+            return 'registro não encontrado', True
 
-        user_uuid = registro.get('uuid')
+        setattr(registro, nome_url, url)
 
-        if not user_uuid:
-            return {'status': 'uuid do usuario não encontrado', 'erro': True}
-
-        path = f'{upload_folder}/{user_uuid}'
-
-        if not os.path.exists(path):
-            return {'status': 'a pasta com o uuid do usuario não encontrada'}
-
-        arquivos = os.listdir(path)
-        print(arquivos, flush=True)
-
-        return {'status': 'tudo bem', 'erro': False}
-
-    except Exception as e:
-        return {'status': 'erro ao tentar atualizar avatar', 'erro': True}
-    
-def armazenar_uuid(Uuid, User_id):
-    try:
-        registro = user_profile.query.filter_by(user_id=User_id).first()
-
-        if not registro:
-            return {'status': 'ocorreu um erro registro vazio', 'erro': True}
-
-        registro.uuid = Uuid
         db.session.commit()
+
+        return 'Sucesso', False
     except Exception as e:
         db.session.rollback()
-        return {'status': 'ocorreu um erro ao tentar salvar no db', 'erro': True}
+        logging.error(f'Erro ao tentar atualizar/criar o registro UserID: {user_id} Erro: {e}')
+        return 'Erro ao tentar atualizar/criar o registro', True
 
-    return {'status': 'tudo certo', 'erro': False}
+def atualizar_arquivo(user_uuid, secure_file, nome):
+    try:
+        arquivo_path = glob.glob(f'{upload_folder}/{user_uuid}/{nome}.*')[0]
+    except IndexError:
+        return 'Nenhum arquivo encontrado', True
     
+    arquivo_nome = os.path.basename(arquivo_path)
+
+    for ext in allowed_extensions:
+        if f'{nome}.{ext}' == arquivo_nome:
+            break
+    else:
+        return 'Extensão de arquivo não permitida', True
+
+    extensao = os.path.splitext(secure_file.filename)[1]
+    try:
+        os.path.join(arquivo_path, )
+        os.replace(arquivo_path, f'{upload_folder}/{user_uuid}/{nome}{extensao}')
+    except Exception as e:
+        return f'Erro ao tentar manipular arquivos {e}', True

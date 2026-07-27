@@ -61,4 +61,5 @@ class user_profile(db.Model):
     nivel = db.Column(db.Numeric(precision=4, scale=2))
     compras = db.Column(db.Integer)
     user_id = db.Column(db.Integer)
-    uuid = db.Column(db.String(36))
+    avatar_url = db.Column(db.String(100))
+    banner_url = db.Column(db.String(100))

@@ -2,6 +2,7 @@ from flask import Flask, Blueprint, request, session, g
 from app.perfil.services import *
 from flask_jwt_extended import get_jwt_identity, create_access_token, set_access_cookies
 from app.decorator import login_required
+from app import upload_folder
 
 BP_perfil = Blueprint('rotas_perfil', __name__)
 
@@ -25,7 +26,7 @@ def refresh():
 
     set_access_cookies(response, NewAccessToken)
 
-    return response, 200
+    return response, 201
 
 @BP_perfil.route('/api/perfil-changes', methods=["PUT"])
 @login_required
@@ -35,62 +36,35 @@ def mudancas():
 
     user_id = g.user_id
 
-    if not user_id:
-        return jsonify({'status': 'o token esta vazio'})
+    if foto:
+        if not user_id:
+            return jsonify({'status': 'User_id vazio'}), 422
 
-    if foto and foto != "":
-        status = verificar_existencia(user_id)
+        v_status, v_erro, url = verificar_existencia(user_id, 'avatar_url')
 
-        if status["erro"]:
-            return jsonify({"status": status['status']})
+        if v_erro:
+            return jsonify({'status': v_status})
 
-        resp_uuid = status['uuid']
-        if not resp_uuid or resp_uuid == "" or resp_uuid == None:
-            if status.get('vazio'):
-                res_avatar = atualizar_avatar(user_id, foto)
+        s_status, s_erro, avatar_seguro = validar_arquivo(foto)
 
-                if res_avatar['erro']:
-                    return jsonify({'status': res_avatar['status']})
+        if s_erro:
+            return jsonify({'status': s_status}), 422
+    
+        if url: # Não tem url no db, e quer colocar um novo
+            c_status, c_erro = criar_arquivo(avatar_seguro, 'avatar', user_id)
 
-                return jsonify({'status': 'certo'})
+            if c_erro:
+                return jsonify({'status': c_status}), 500
+            else:
+                return jsonify({'status': c_status}), 201
         else:
-            resposta = validar_e_sanitizar_arquivo(foto, "avatar")
+            a_status = atualizar_arquivo(url, avatar_seguro, 'avatar')
+            return jsonify({'status': a_status})
 
-            if not resposta["value"]:
-                return jsonify({'status': resposta["status"]})
+from flask import send_file
 
-            try:
-                foto.save(resposta["path"])
-            except Exception as e:
-                return jsonify({'status': f'erro ao armazenar a foto {e}'})
+@BP_perfil.route('/api/uploads/<string:user_uuid>/<path:filename>')
+def uploads(user_uuid, filename):
+    path = os.path.abspath(f'{upload_folder}/{user_uuid}/{filename}') # Pqp fiquei 1 hora para descobrir que não era o caminho relativo, mais sim absoluto
 
-            resposta_uuid = armazenar_uuid(resp_uuid, user_id)
-            if resposta_uuid["erro"]:
-                return jsonify({'status': resposta_uuid["status"]})
-                
-    if banner and banner != "":
-
-        status = verificar_existencia(user_id)
-
-        if status["erro"]:
-            return jsonify({'status': status['status']})
-
-        res_uuid = status['uuid']
-        if not res_uuid or res_uuid == "" or res_uuid == None:
-            pass
-        else:
-            resposta = validar_e_sanitizar_arquivo(banner, "banner")
-
-            if not resposta["value"]:
-                return jsonify({'status': resposta["status"]})
-
-            try:
-                banner.save(resposta["path"])
-            except Exception as e:
-                return jsonify({'status': 'erro ao salvar a imagem'})
-
-            resposta_uuid = armazenar_uuid(resp_uuid, user_id)
-            if resposta_uuid["erro"]:
-                return jsonify({'status': resposta_uuid["status"]})
-            
-    return jsonify({'status': 'sucesso'})
+    return send_file(path) # Usei send_file mais poderia ser send_from_directory
