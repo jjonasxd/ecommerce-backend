@@ -20,9 +20,10 @@ def resgatar_dados_usuario(UserId):
         return jsonify({'status': 'usuario não encontrado'})
 
     user_data = {
-        "nome_completo": getattr(user_profiles, 'nome_completo', None),
+        "nome_completo": user_profiles.primeiro_nome,
         "primeiro_nome": getattr(user_profiles, 'primeiro_nome', None),
-        "foto_url": getattr(user_profiles, 'foto_url', None),
+        "avatar_url": getattr(user_profiles, 'avatar_url', None),
+        "banner_url": getattr(user_profiles, 'banner_url', None),
         "bio": getattr(user_profiles, 'bio', None),
         "data_de_nascimento": getattr(user_profiles, 'data_de_nascimento', None),
         "vendedor": getattr(user_profiles, 'vendedor', None),
@@ -71,7 +72,7 @@ def validar_arquivo(file):
 
     return 'Checagem concluida imagem válida', False, file
 
-def verificar_existencia(id, nome_url):
+def verificar_existencia(id, nome_url, outro_url):
     try:
         registro = user_profile.query.filter_by(user_id=id).first()
 
@@ -80,10 +81,15 @@ def verificar_existencia(id, nome_url):
             return "Registro não encontrado", True, None
 
         url = getattr(registro, nome_url, None)
-        print(url, flush=True)
 
         if not url:
-            return 'URL não encontrada', False, None
+            url = getattr(registro, outro_url, None)
+            
+            if not url:
+                return 'URL não encontrada', False, None
+            else:
+                return 'Outra url encontrada', False, url
+        
 
         return "Encontrada", False, url
     except Exception as e:
@@ -123,13 +129,20 @@ def criar_arquivo(file_secure, nome, user_id):
         logging.error(f'Erro ao tentar atualizar/criar o registro UserID: {user_id} Erro: {e}')
         return 'Erro ao tentar atualizar/criar o registro', True
 
-def atualizar_arquivo(user_uuid, secure_file, nome):
+def atualizar_arquivo(url, secure_file, nome, user_id):
+    diretorio, arquivo = os.path.split(url)
+    user_uuid = os.path.basename(diretorio)
+
+    print(user_uuid)
+
     try:
         arquivo_path = glob.glob(f'{upload_folder}/{user_uuid}/{nome}.*')[0]
     except IndexError:
         return 'Nenhum arquivo encontrado', True
-    
+
+    print(arquivo_path, nome)
     arquivo_nome = os.path.basename(arquivo_path)
+    print(arquivo_nome, flush=True)
 
     for ext in allowed_extensions:
         if f'{nome}.{ext}' == arquivo_nome:
@@ -139,7 +152,23 @@ def atualizar_arquivo(user_uuid, secure_file, nome):
 
     extensao = os.path.splitext(secure_file.filename)[1]
     try:
-        os.path.join(arquivo_path, )
-        os.replace(arquivo_path, f'{upload_folder}/{user_uuid}/{nome}{extensao}')
+        if os.path.exists(arquivo_path):
+            os.remove(arquivo_path)
+
+        secure_file.save(f'{upload_folder}/{user_uuid}/{nome}{extensao}')
+        
+        url = f'http://127.0.0.1:5000/api/uploads/{user_uuid}/{nome}{extensao}'
+
+        registro = user_profile.query.filter_by(user_id=user_id).first()
+
+        if not registro:
+            return 'Não foi possivel achar registro', True
+        
+        setattr(registro, f'{nome}_url', url)
+
+        db.session.commit()
+
+        return 'Arquivo substituido com sucesso', False
     except Exception as e:
+        db.session.rollback()
         return f'Erro ao tentar manipular arquivos {e}', True

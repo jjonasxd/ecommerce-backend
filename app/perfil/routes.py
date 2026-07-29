@@ -36,11 +36,11 @@ def mudancas():
 
     user_id = g.user_id
 
+    if not user_id:
+        return jsonify({'status': 'User_id vazio'}), 422
+    
     if foto:
-        if not user_id:
-            return jsonify({'status': 'User_id vazio'}), 422
-
-        v_status, v_erro, url = verificar_existencia(user_id, 'avatar_url')
+        v_status, v_erro, url = verificar_existencia(user_id, 'avatar_url', 'banner_url')
 
         if v_erro:
             return jsonify({'status': v_status})
@@ -50,16 +50,36 @@ def mudancas():
         if s_erro:
             return jsonify({'status': s_status}), 422
     
-        if url: # Não tem url no db, e quer colocar um novo
+        if not url: # Não tem url no db, e quer colocar um novo
             c_status, c_erro = criar_arquivo(avatar_seguro, 'avatar', user_id)
 
+            if c_erro:
+                return jsonify({'status': c_status}), 500
+        else:
+            a_status = atualizar_arquivo(url, avatar_seguro, 'avatar', user_id)
+
+    if banner:
+        v_status, v_erro, url = verificar_existencia(user_id, 'banner_url', 'avatar_url')
+
+        if v_erro:
+            return jsonify({'status': v_status})
+    
+        s_status, s_erro, banner_seguro = validar_arquivo(banner)
+    
+        if s_erro:
+            return jsonify({'status': s_status}), 422
+        
+        if not url: # Não tem url no db, e quer colocar um novo
+            c_status, c_erro = criar_arquivo(banner_seguro, 'banner', user_id)
+    
             if c_erro:
                 return jsonify({'status': c_status}), 500
             else:
                 return jsonify({'status': c_status}), 201
         else:
-            a_status = atualizar_arquivo(url, avatar_seguro, 'avatar')
+            a_status = atualizar_arquivo(url, banner_seguro, 'banner', user_id)
             return jsonify({'status': a_status})
+        
 
 from flask import send_file
 
