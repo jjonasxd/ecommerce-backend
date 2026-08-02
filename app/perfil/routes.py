@@ -1,8 +1,9 @@
-from flask import Flask, Blueprint, request, session, g
+from flask import Flask, Blueprint, request, session, g, send_file
 from app.perfil.services import *
 from flask_jwt_extended import get_jwt_identity, create_access_token, set_access_cookies
 from app.decorator import login_required
 from app import upload_folder
+
 
 BP_perfil = Blueprint('rotas_perfil', __name__)
 
@@ -28,63 +29,75 @@ def refresh():
 
     return response, 201
 
-@BP_perfil.route('/api/perfil-changes', methods=["PUT"])
+@BP_perfil.route('/api/perfil-avatar', methods=["PUT"])
 @login_required
 def mudancas():
     foto = request.files.get('foto')
-    banner = request.files.get('banner')
-
     user_id = g.user_id
 
     if not user_id:
         return jsonify({'status': 'User_id vazio'}), 422
-    
+
     if foto:
-        v_status, v_erro, url = verificar_existencia(user_id, 'avatar_url', 'banner_url')
+        v_status, v_erro = validar_arquivo(foto)
 
         if v_erro:
             return jsonify({'status': v_status})
 
-        s_status, s_erro, avatar_seguro = validar_arquivo(foto)
+        a_status, a_erro, a_url, user_uuid = avatar_verificar_existencia(user_id)
 
-        if s_erro:
-            return jsonify({'status': s_status}), 422
-    
-        if not url: # Não tem url no db, e quer colocar um novo
-            c_status, c_erro = criar_arquivo(avatar_seguro, 'avatar', user_id)
-
-            if c_erro:
-                return jsonify({'status': c_status}), 500
-        else:
-            a_status = atualizar_arquivo(url, avatar_seguro, 'avatar', user_id)
-
-    if banner:
-        v_status, v_erro, url = verificar_existencia(user_id, 'banner_url', 'avatar_url')
-
-        if v_erro:
-            return jsonify({'status': v_status})
-    
-        s_status, s_erro, banner_seguro = validar_arquivo(banner)
-    
-        if s_erro:
-            return jsonify({'status': s_status}), 422
-        
-        if not url: # Não tem url no db, e quer colocar um novo
-            c_status, c_erro = criar_arquivo(banner_seguro, 'banner', user_id)
-    
-            if c_erro:
-                return jsonify({'status': c_status}), 500
-            else:
-                return jsonify({'status': c_status}), 201
-        else:
-            a_status = atualizar_arquivo(url, banner_seguro, 'banner', user_id)
+        if a_erro:
             return jsonify({'status': a_status})
         
+        if a_url:
+            return atualizar_avatar(user_uuid, foto, user_id)
+        else:
+            if user_uuid:
+                 return criar_avatar(user_uuid, foto, user_id)
+            else:
+                c_status, user_uuid, c_erro, c_status_code = criar_perfil(user_id)
 
-from flask import send_file
+                if c_erro:
+                    return jsonify({'status': c_status}), c_status_code
+                
+                if not user_uuid:
+                    return jsonify({'status': c_status})
+                
+                return criar_avatar(user_uuid, foto, user_id)
+    else:
+        return jsonify({'status': 'foto não enviada'}), 204
 
 @BP_perfil.route('/api/uploads/<string:user_uuid>/<path:filename>')
 def uploads(user_uuid, filename):
     path = os.path.abspath(f'{upload_folder}/{user_uuid}/{filename}') # Pqp fiquei 1 hora para descobrir que não era o caminho relativo, mais sim absoluto
 
     return send_file(path) # Usei send_file mais poderia ser send_from_directory
+
+@BP_perfil.route('/api/perfil-changes', methods=['POST'])
+@login_required
+def modificar():
+    dados = request.json
+    user_id = g.user_id
+
+    if not user_id:
+        return jsonify({'status': 'Seu JWT esta vazio'})
+
+    if dados:
+        status, erro = testar_dados(dados)
+        if erro:
+            return jsonify({'status', status})
+        return alterar_dados(dados, user_id)
+    else:
+        return jsonify({'status': 'nenhum dado enviado'}), 204
+
+@BP_perfil.route('/api/exluir-conta', methods=['GET']) # Não joguem pedra, e apenas para finalizar o perfil
+@jwt_required()
+def excluir_conta():
+    user_id = get_jwt_identity()
+
+    if not user_id:
+        return jsonify({'status': 'ID faltando'})
+
+    return excluir_tudo(user_id)
+
+    

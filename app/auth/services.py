@@ -193,7 +193,7 @@ def jwt(email):
         set_access_cookies(response, access_token)
         set_refresh_cookies(response, refresh_token)
     except Exception as e:
-        return jsonify({'status': 'ocorreu um erro ao criar os tokens', 'details': e})
+        return jsonify({'status': f'ocorreu um erro ao criar os tokens {e}'})
     
     try:
         TableRefreshToken = RefreshTokens(token=refresh_token, userid=int(usuario.id))

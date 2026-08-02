@@ -62,4 +62,4 @@ class user_profile(db.Model):
     compras = db.Column(db.Integer)
     user_id = db.Column(db.Integer)
     avatar_url = db.Column(db.String(100))
-    banner_url = db.Column(db.String(100))
+    uuid = db.Column(db.String(36))
