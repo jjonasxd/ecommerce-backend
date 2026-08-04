@@ -45,4 +45,7 @@ def create_app():
     from app.perfil.routes import BP_perfil
     app.register_blueprint(BP_perfil)
 
+    from app.produtos.routes import BP_produtos
+    app.register_blueprint(BP_produtos)
+
     return(app)

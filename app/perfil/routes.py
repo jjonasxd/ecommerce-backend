@@ -4,7 +4,6 @@ from flask_jwt_extended import get_jwt_identity, create_access_token, set_access
 from app.decorator import login_required
 from app import upload_folder
 
-
 BP_perfil = Blueprint('rotas_perfil', __name__)
 
 @BP_perfil.route('/api/perfil-dados', methods=['GET'])

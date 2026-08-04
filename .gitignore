@@ -10,3 +10,4 @@ gitchave.txt
 app/uploads/*
 
 !app/uploads/uuid
+sql/

@@ -6,7 +6,7 @@ class favoritos(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, nullable=False)
     usuario_id = db.Column(db.Integer)
-    produto_id = db.Column(db.Integer)
+    produto_id = db.Column(db.String(500))
 
 class produtos(db.Model):
     __tablename__ = 'produtos'

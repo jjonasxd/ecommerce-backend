@@ -22,7 +22,7 @@
 - [x] Criptografia e Hash
 - [x] Perfil interativo
 - [ ] Cadastro de produtos (*Desenvolvimento*)
-- [ ] Simulação de compra
+- [ ] Simulação de compra (*Desenvolvimento*)
 - [ ] Carrinho (*Desenvolvimento*)
 
 ---
@@ -40,6 +40,9 @@
 │   ├── perfil
 │   │   ├── routes.py
 │   │   └── services.py
+│   ├── produtos
+│   │   └── routes.py
+│   │   └── services.py
 │   ├── templates
 │   │   └── email.html
 │   └── uploads
